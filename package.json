@@ -1,0 +1,17 @@
+{
+  "name": "monday-automation-toolkit",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Standalone monday automation toolkit for local Cursor workflows.",
+  "type": "module",
+  "bin": {
+    "monday-auto": "./bin/monday-auto.js"
+  },
+  "scripts": {
+    "monday:auto": "node ./bin/monday-auto.js",
+    "monday:start": "node ./bin/monday-auto.js start",
+    "monday:check": "node ./bin/monday-auto.js check",
+    "monday:stop": "node ./bin/monday-auto.js stop",
+    "monday:init": "node ./bin/monday-auto.js init"
+  }
+}
