@@ -2,7 +2,7 @@
 
 Canonical onboarding is documented in:
 
-- `TEAM_SETUP_GUIDE.md`
+- `SETUP_GUIDE.md`
 
 This file is a compact checklist for reviewers and operators.
 

@@ -1,4 +1,4 @@
-# See TEAM_SETUP_GUIDE.md for step-by-step setup and ID discovery queries.
+# See SETUP_GUIDE.md for step-by-step setup and ID discovery queries.
 
 MONDAY_API_TOKEN="replace-me"
 MONDAY_WEBHOOK_SECRET="replace-me"

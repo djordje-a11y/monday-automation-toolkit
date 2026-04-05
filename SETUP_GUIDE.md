@@ -1,4 +1,4 @@
-# Monday Automation Team Setup Guide
+# Monday Automation Setup Guide
 
 This guide is written for first-time setup and team handoff.
 
@@ -58,7 +58,23 @@ Set it in shell while querying:
 export MONDAY_API_TOKEN="paste-token-here"
 ```
 
-## 4.2 Get your monday user ID (for assignee filter)
+## 4.2 Generate `MONDAY_WEBHOOK_SECRET`
+
+Generate a strong random secret locally:
+
+```bash
+openssl rand -hex 32
+```
+
+Example of setting it directly:
+
+```bash
+export MONDAY_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+```
+
+Use this same value in `.monday.local` as `MONDAY_WEBHOOK_SECRET`.
+
+## 4.3 Get your monday user ID (for assignee filter)
 
 ```bash
 curl -s https://api.monday.com/v2 \
@@ -70,7 +86,7 @@ curl -s https://api.monday.com/v2 \
 
 Use `me.id` for `MONDAY_ASSIGNEE_USER_IDS`.
 
-## 4.3 Find board IDs
+## 4.4 Find board IDs
 
 ```bash
 curl -s https://api.monday.com/v2 \
@@ -82,7 +98,7 @@ curl -s https://api.monday.com/v2 \
 
 Use the board ID where webhooks should be registered in `MONDAY_WEBHOOK_REGISTER_BOARD_IDS`.
 
-## 4.4 Subitem gotcha: URL may show subitem board ID only
+## 4.5 Subitem gotcha: URL may show subitem board ID only
 
 When your ticket is a subitem, the board visible in URL is not always the parent board that should own webhook registrations.
 
@@ -98,7 +114,7 @@ curl -s https://api.monday.com/v2 \
 
 If `parent_item.board.id` exists, prefer that for webhook registration and branch-rule group mapping.
 
-## 4.5 Get group IDs for branch rules
+## 4.6 Get group IDs for branch rules
 
 ```bash
 curl -s https://api.monday.com/v2 \
@@ -112,7 +128,7 @@ Use group IDs in `MONDAY_AGENT_BRANCH_PREFIX_RULES`, for example:
 
 `id:group_mkx4b56t=fix,id:new_group=feat,bugs=fix,epics backlog=feat`
 
-## 4.6 Get column IDs (status/person/routing key)
+## 4.7 Get column IDs (status/person/routing key)
 
 ```bash
 curl -s https://api.monday.com/v2 \
@@ -230,7 +246,7 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
   Verify monday status text and `MONDAY_TRIGGER_STATUS` value.
 
 - **Auto-register webhook fails**  
-  Usually wrong board ID. Confirm parent board ID for subitem flows (section 4.4).
+  Usually wrong board ID. Confirm parent board ID for subitem flows (section 4.5).
 
 - **No dispatch because of filters**  
   Check assignee/routing settings and IDs.

@@ -82,7 +82,7 @@ In Cursor Agent chat, attach:
 
 For a complete from-scratch onboarding flow (including how to find monday board/group/user/column IDs and the subitem parent-board gotcha), read:
 
-- `TEAM_SETUP_GUIDE.md`
+- `SETUP_GUIDE.md`
 
 ## Additional references
 

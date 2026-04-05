@@ -9,7 +9,7 @@ Bridge role:
 
 Use this with:
 
-- `TEAM_SETUP_GUIDE.md` (full onboarding)
+- `SETUP_GUIDE.md` (full onboarding)
 - `MONDAY_AGENT_AUTOMATION_REQUIREMENTS.md` (operator checklist)
 
 ## Run via toolkit CLI
