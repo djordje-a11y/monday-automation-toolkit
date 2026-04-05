@@ -78,7 +78,7 @@ In Cursor Agent chat, attach:
 @.monday/handoffs/<branch-flat>.agent-handoff.md
 ```
 
-## Full Team Guide
+## Full Setup Guide
 
 For a complete from-scratch onboarding flow (including how to find monday board/group/user/column IDs and the subitem parent-board gotcha), read:
 
