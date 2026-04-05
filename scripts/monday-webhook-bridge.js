@@ -227,6 +227,7 @@ async function loadMondayEnvValues(args) {
     'MONDAY_WEBHOOK_SECRET',
     'MONDAY_BOARD_ID',
     'MONDAY_ALLOWED_BOARD_IDS',
+    'MONDAY_WEBHOOK_REGISTER_BOARD_IDS',
     'MONDAY_TRIGGER_STATUS',
     'MONDAY_STATUS_COLUMN_ID',
     'MONDAY_ASSIGNEE_COLUMN_ID',
@@ -444,6 +445,14 @@ function buildRuntimeConfig(args, envValues) {
     process.env.MONDAY_BOARD_ID || envValues.MONDAY_BOARD_ID || '',
   ).trim();
   if (configuredBoardId) allowedBoardIds.add(configuredBoardId);
+  const registerBoardIds = parseList(
+    process.env.MONDAY_WEBHOOK_REGISTER_BOARD_IDS ||
+      envValues.MONDAY_WEBHOOK_REGISTER_BOARD_IDS ||
+      getOptionalArg(args, 'register-board-ids'),
+  );
+  for (const boardId of registerBoardIds) {
+    allowedBoardIds.add(boardId);
+  }
 
   const triggerStatus = String(
     process.env.MONDAY_TRIGGER_STATUS ||
@@ -880,6 +889,7 @@ function printUsage() {
   print('  --routing-key "<value>"');
   print('  --on-match-command "<shell command>"');
   print('  --allowed-board-ids 111,222');
+  print('  --register-board-ids 111,222');
   print('  --dry-run true|false');
   print('  --allow-empty-secret true|false');
   print('  --single-ticket-mode true|false');
@@ -887,6 +897,8 @@ function printUsage() {
   print('Environment variables (preferred):');
   print('  MONDAY_API_TOKEN (required)');
   print('  MONDAY_WEBHOOK_SECRET (recommended)');
+  print('  MONDAY_ALLOWED_BOARD_IDS and/or MONDAY_BOARD_ID (board scope required)');
+  print('  MONDAY_WEBHOOK_REGISTER_BOARD_IDS (also used as board scope fallback)');
   print('  MONDAY_TRIGGER_STATUS, MONDAY_STATUS_COLUMN_ID');
   print('  MONDAY_ASSIGNEE_USER_IDS, MONDAY_ASSIGNEE_COLUMN_ID');
   print('  MONDAY_ROUTING_KEY, MONDAY_ROUTING_KEY_COLUMN_ID');
@@ -914,6 +926,13 @@ async function main(argv = process.argv) {
   print(`listen: http://${config.host}:${config.port}${config.webhookPath}`, colors.dim);
   print(`health: http://${config.host}:${config.port}${config.healthPath}`, colors.dim);
   print(`trigger status: ${config.triggerStatus} (column: ${config.statusColumnId})`, colors.dim);
+  if (config.allowedBoardIds.size > 0) {
+    print(`allowed boards: [${Array.from(config.allowedBoardIds).join(', ')}]`, colors.dim);
+  } else {
+    fail(
+      'Board scope is required. Set MONDAY_ALLOWED_BOARD_IDS, MONDAY_BOARD_ID, or MONDAY_WEBHOOK_REGISTER_BOARD_IDS.',
+    );
+  }
   if (config.assigneeUserIds.size > 0) {
     print(
       `assignee filter: [${Array.from(config.assigneeUserIds).join(', ')}]` +

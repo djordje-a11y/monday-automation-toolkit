@@ -1,7 +1,13 @@
 # See SETUP_GUIDE.md for step-by-step setup and ID discovery queries.
+# Strict baseline profile for v1 rollout.
 
 MONDAY_API_TOKEN="replace-me"
 MONDAY_WEBHOOK_SECRET="replace-me"
+
+# Board scope (required for predictable routing)
+MONDAY_BOARD_ID="2116143116"
+MONDAY_ALLOWED_BOARD_IDS="2116143116,2131109132"
+
 MONDAY_TRIGGER_STATUS="AI work in progress"
 MONDAY_STATUS_COLUMN_ID="status"
 
@@ -18,6 +24,7 @@ MONDAY_WEBHOOK_AUTO_REGISTER="true"
 MONDAY_WEBHOOK_REGISTER_BOARD_IDS="2116143116"
 MONDAY_WEBHOOK_EVENT="change_specific_column_value"
 MONDAY_WEBHOOK_REGISTER_SUBITEMS="true"
+MONDAY_AUTOMATION_RUNTIME_FILE=".monday/runtime.json"
 MONDAY_WEBHOOK_MANAGED_STATE_FILE=".monday/managed-webhooks.json"
 
 MONDAY_AGENT_BRANCH_PREFIX="dev/monday"
@@ -33,3 +40,10 @@ MONDAY_AGENT_OUTPUT_DIR=".monday/intake"
 MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"
 
 MONDAY_AGENT_COMMAND='$HOME/.local/bin/cursor-agent --mode plan --workspace "$PWD" "Read $MONDAY_AGENT_IDE_HANDOFF_FILE and return required sections."'
+
+# Extended / compatibility options (optional)
+# Keep these only when you need explicit override behavior.
+# MONDAY_ON_MATCH_COMMAND='monday-auto intake --workspace "/absolute/path/to/your/repo" --item-id "$MONDAY_TRIGGER_ITEM_ID" --dispatch'
+# MONDAY_AGENT_RULES_FILE="scripts/templates/monday-ticket-agent-rules.md"
+# MONDAY_AGENT_UNSET_CURSOR_API_KEY="true"
+# MONDAY_AGENT_HEADLESS_PRINT="false"

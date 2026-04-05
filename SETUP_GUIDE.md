@@ -194,24 +194,75 @@ cp /path/to/monday-automation-toolkit/.monday.local.example /path/to/your/repo/.
 
 Edit values in `/path/to/your/repo/.monday.local`.
 
-Minimum required values:
+Strict baseline required values (recommended for team rollout):
 
 - `MONDAY_API_TOKEN`
 - `MONDAY_WEBHOOK_SECRET`
+- `MONDAY_BOARD_ID`
+- `MONDAY_ALLOWED_BOARD_IDS`
 - `MONDAY_TRIGGER_STATUS`
+- `MONDAY_STATUS_COLUMN_ID`
 - `MONDAY_AGENT_COMMAND`
+- `MONDAY_WEBHOOK_AUTO_REGISTER=true`
+- `MONDAY_WEBHOOK_REGISTER_BOARD_IDS=<board-id-list>`
+
+Why both board variables:
+
+- `MONDAY_ALLOWED_BOARD_IDS` controls bridge-side filtering (which boards are accepted).
+- `MONDAY_WEBHOOK_REGISTER_BOARD_IDS` controls where managed webhooks are created.
+- Toolkit now also treats `MONDAY_WEBHOOK_REGISTER_BOARD_IDS` as board-scope fallback.
 
 Strongly recommended:
 
 - `MONDAY_ASSIGNEE_USER_IDS` (or routing key) to avoid dispatching everyone’s tasks
-- `MONDAY_WEBHOOK_AUTO_REGISTER=true`
-- `MONDAY_WEBHOOK_REGISTER_BOARD_IDS=<parent-board-id>`
 
 For easy Cursor `@`:
 
 - `MONDAY_AGENT_OUTPUT_DIR=".monday/intake"`
 - `MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"`
 - `MONDAY_AGENT_IDE_HANDOFF="true"`
+
+### 5.1 Extended options (optional / compatibility)
+
+`.monday.local.example` is a strict baseline profile.  
+These additional options are supported when you need explicit override behavior:
+
+- `MONDAY_ON_MATCH_COMMAND` for custom dispatch command override
+- `MONDAY_AUTOMATION_RUNTIME_FILE` and `MONDAY_WEBHOOK_MANAGED_STATE_FILE` for explicit state file locations
+- `MONDAY_AGENT_RULES_FILE` to load custom ticket rules text
+- `MONDAY_AGENT_UNSET_CURSOR_API_KEY` to force login-session auth behavior for `cursor-agent`
+- `MONDAY_AGENT_HEADLESS_PRINT` to control terminal-only output vs interactive behavior
+
+### 5.2 Runtime flow and variable contract (exact sequence)
+
+1. **Launcher config check (`monday-auto check/start`)**
+   - Requires: `MONDAY_API_TOKEN`, `MONDAY_WEBHOOK_SECRET`, `MONDAY_AGENT_COMMAND`
+   - Requires board scope: one or more of `MONDAY_ALLOWED_BOARD_IDS`, `MONDAY_BOARD_ID`, `MONDAY_WEBHOOK_REGISTER_BOARD_IDS`
+   - Requires webhook target mode: tunnel enabled or `MONDAY_PUBLIC_WEBHOOK_BASE_URL`
+
+2. **Bridge startup**
+   - Bridge enforces board scope before accepting events.
+   - Trigger matching uses `MONDAY_TRIGGER_STATUS` + `MONDAY_STATUS_COLUMN_ID`.
+   - Optional narrowing: assignee (`MONDAY_ASSIGNEE_*`) or routing key (`MONDAY_ROUTING_KEY_*`).
+
+3. **Webhook registration (when `MONDAY_WEBHOOK_AUTO_REGISTER=true`)**
+   - Uses `MONDAY_WEBHOOK_REGISTER_BOARD_IDS` (or falls back to `MONDAY_BOARD_ID`).
+   - Registers `change_specific_column_value` (with fallback) and optionally subitem webhook when `MONDAY_WEBHOOK_REGISTER_SUBITEMS=true`.
+
+4. **Matched event dispatch**
+   - Bridge runs `MONDAY_ON_MATCH_COMMAND` (default: toolkit intake).
+   - Bridge exports trigger env vars (`MONDAY_TRIGGER_ITEM_ID`, board/status metadata) for intake.
+
+5. **Intake processing**
+   - Requires token + `--item-id`.
+   - Writes prompt/context to `MONDAY_AGENT_OUTPUT_DIR` (default `.monday/intake`).
+   - Writes handoff to `MONDAY_AGENT_HANDOFF_DIR` (default `.monday/handoffs`) when `MONDAY_AGENT_IDE_HANDOFF=true`.
+   - Prepares git branch using `MONDAY_AGENT_GIT_*` (defaults: `acceptance`, `origin`, clean worktree required).
+
+6. **Agent dispatch**
+   - Runs `MONDAY_AGENT_COMMAND`.
+   - Injects paths via env (`MONDAY_AGENT_PROMPT_FILE`, `MONDAY_AGENT_CONTEXT_FILE`, `MONDAY_AGENT_IDE_HANDOFF_FILE`).
+   - For interactive UI behavior, set `MONDAY_AGENT_HEADLESS_PRINT=false`.
 
 ## 6) Validate config before running
 
@@ -222,6 +273,11 @@ monday-auto check --workspace /path/to/your/repo
 Fix all `FAIL` items before continuing.
 
 ## 7) Start automation
+
+Use the toolkit launcher, not old project scripts:
+
+- Use: `monday-auto start --workspace ...`
+- Avoid: `npm run monday:automation:start` in product repos that still have legacy scripts
 
 ```bash
 monday-auto start --workspace /path/to/your/repo
@@ -264,6 +320,11 @@ The markdown contains ticket context + rules.
 
 ## 10) Stop automation
 
+Use the toolkit launcher, not old project scripts:
+
+- Use: `monday-auto stop --workspace ...`
+- Avoid: `npm run monday:automation:stop` in product repos that still have legacy scripts
+
 ```bash
 monday-auto stop --workspace /path/to/your/repo
 ```
@@ -281,6 +342,13 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
 
 - **`EADDRINUSE` on 8787**  
   Run `monday-auto stop ...` then restart. The launcher also reuses healthy bridge/tunnel processes automatically.
+
+- **Automation ran but used old `artifacts/...` paths**  
+  You likely started legacy in-repo scripts. Start/stop with `monday-auto ... --workspace ...` so toolkit defaults (`.monday/...`) apply.
+
+- **Fail: board scope is missing**  
+  Set board scope explicitly with `MONDAY_ALLOWED_BOARD_IDS` and/or `MONDAY_BOARD_ID`.  
+  If you use auto-register, ensure `MONDAY_WEBHOOK_REGISTER_BOARD_IDS` is also set.
 
 - **`npm link` fails with `EACCES` (`/usr/local/lib/node_modules`)**  
   Configure user-scoped npm globals and retry:

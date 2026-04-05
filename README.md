@@ -62,6 +62,8 @@ monday-auto init --workspace /path/to/repo
 cp /path/to/monday-automation-toolkit/.monday.local.example /path/to/repo/.monday.local
 ```
 
+The example file is a strict baseline profile (including board scope).
+
 4. Validate config:
 
 ```bash
@@ -91,6 +93,9 @@ monday-auto bridge --workspace /path/to/repo
 monday-auto intake --workspace /path/to/repo --item-id 123 --dispatch
 ```
 
+Always run/start/stop via `monday-auto` when validating toolkit behavior.  
+If a target project still contains old `npm run monday:automation:*` scripts, do not use them.
+
 ## Generated files
 
 Per workspace, the toolkit writes:
@@ -112,6 +117,8 @@ In Cursor Agent chat, attach:
 For a complete from-scratch onboarding flow (including how to find monday board/group/user/column IDs and the subitem parent-board gotcha), read:
 
 - `SETUP_GUIDE.md`
+
+`SETUP_GUIDE.md` also documents extended/compat `.monday.local` options for explicit override behavior.
 
 ## Additional references
 

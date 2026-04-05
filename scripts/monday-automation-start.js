@@ -294,6 +294,13 @@ function buildRuntimeConfig(args, envValues, envFile) {
     : boardId
       ? [boardId]
       : [];
+  const allowedBoardIds = Array.from(
+    new Set([
+      ...parseList(process.env.MONDAY_ALLOWED_BOARD_IDS || envValues.MONDAY_ALLOWED_BOARD_IDS || ''),
+      ...registerBoardIds,
+      ...(boardId ? [boardId] : []),
+    ]),
+  );
   const webhookEvent = String(
     process.env.MONDAY_WEBHOOK_EVENT ||
       envValues.MONDAY_WEBHOOK_EVENT ||
@@ -307,9 +314,7 @@ function buildRuntimeConfig(args, envValues, envFile) {
     apiUrl: String(process.env.MONDAY_API_URL || envValues.MONDAY_API_URL || DEFAULT_API_URL).replace(/\/$/, ''),
     apiVersion: String(process.env.MONDAY_API_VERSION || envValues.MONDAY_API_VERSION || DEFAULT_API_VERSION).trim(),
     boardId,
-    allowedBoardIds: parseList(
-      process.env.MONDAY_ALLOWED_BOARD_IDS || envValues.MONDAY_ALLOWED_BOARD_IDS || '',
-    ),
+    allowedBoardIds,
     statusColumnId: String(
       process.env.MONDAY_STATUS_COLUMN_ID || envValues.MONDAY_STATUS_COLUMN_ID || DEFAULT_STATUS_COLUMN_ID,
     ).trim(),
@@ -621,6 +626,15 @@ function validateRequirements(config) {
       ok: Boolean(config.agentCommand),
       required: true,
       message: config.agentCommand ? 'Configured' : 'Missing agent spawn command',
+    },
+    {
+      key: 'BOARD_SCOPE',
+      ok: config.allowedBoardIds.length > 0,
+      required: true,
+      message:
+        config.allowedBoardIds.length > 0
+          ? `Scoped boards: ${config.allowedBoardIds.join(', ')}`
+          : 'No board scope configured (set MONDAY_ALLOWED_BOARD_IDS, MONDAY_BOARD_ID, or MONDAY_WEBHOOK_REGISTER_BOARD_IDS)',
     },
     {
       key: 'USER_FILTER',
