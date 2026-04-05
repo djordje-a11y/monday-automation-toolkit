@@ -16,9 +16,12 @@ Goal:
 
 ## 2) Install the toolkit CLI once
 
+### Option A (recommended): global `monday-auto` command
+
 ```bash
 git clone https://github.com/djordje-a11y/monday-automation-toolkit.git
 cd monday-automation-toolkit
+npm config set prefix "$HOME/.local" --location=user
 npm link
 ```
 
@@ -26,6 +29,43 @@ Verify:
 
 ```bash
 monday-auto
+```
+
+If `npm link` fails with:
+
+```text
+EACCES: permission denied, mkdir '/usr/local/lib/node_modules'
+```
+
+run:
+
+```bash
+npm config set prefix "$HOME/.local" --location=user
+npm config get prefix
+# expected: /home/<you>/.local
+npm link
+```
+
+If `monday-auto` is not found after linking, ensure `~/.local/bin` is in `PATH`:
+
+```bash
+grep -q 'HOME/.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+### Option B: no global link (works on locked-down machines)
+
+From anywhere, run toolkit commands via npm script:
+
+```bash
+npm --prefix /path/to/monday-automation-toolkit run monday:auto -- check --workspace /path/to/your/repo
+```
+
+In this guide we use `monday-auto ...` for readability.  
+If you use Option B, replace each command with:
+
+```bash
+npm --prefix /path/to/monday-automation-toolkit run monday:auto -- <command> [args...]
 ```
 
 ## 3) Initialize any target workspace
@@ -241,6 +281,11 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
 
 - **`EADDRINUSE` on 8787**  
   Run `monday-auto stop ...` then restart. The launcher also reuses healthy bridge/tunnel processes automatically.
+
+- **`npm link` fails with `EACCES` (`/usr/local/lib/node_modules`)**  
+  Configure user-scoped npm globals and retry:
+  `npm config set prefix "$HOME/.local" --location=user` then `npm link`.
+  If needed, add `~/.local/bin` to `PATH` and `source ~/.bashrc`.
 
 - **Trigger ignored due status mismatch**  
   Verify monday status text and `MONDAY_TRIGGER_STATUS` value.

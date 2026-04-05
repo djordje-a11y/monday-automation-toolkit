@@ -14,11 +14,40 @@ This toolkit is intentionally **outside product repos** and writes local runtime
 
 ## Quick Start
 
-1. Install CLI once:
+1. Install CLI once (recommended):
 
 ```bash
 cd /path/to/monday-automation-toolkit
+npm config set prefix "$HOME/.local" --location=user
 npm link
+```
+
+If `npm link` fails with:
+
+```text
+EACCES: permission denied, mkdir '/usr/local/lib/node_modules'
+```
+
+run:
+
+```bash
+npm config set prefix "$HOME/.local" --location=user
+npm config get prefix
+# expected: /home/<you>/.local
+npm link
+```
+
+If `monday-auto` is still not found, ensure `~/.local/bin` is on `PATH`:
+
+```bash
+grep -q 'HOME/.local/bin' ~/.bashrc || echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+No-link fallback (works without global install):
+
+```bash
+npm --prefix /path/to/monday-automation-toolkit run monday:auto -- check --workspace /path/to/repo
 ```
 
 2. Initialize a target workspace:
