@@ -1,3 +1,5 @@
+# See TEAM_SETUP_GUIDE.md for step-by-step setup and ID discovery queries.
+
 MONDAY_API_TOKEN="replace-me"
 MONDAY_WEBHOOK_SECRET="replace-me"
 MONDAY_TRIGGER_STATUS="AI work in progress"
@@ -12,9 +14,11 @@ MONDAY_ASSIGNEE_USER_IDS="12345678"
 # MONDAY_ROUTING_KEY="your-key"
 
 MONDAY_WEBHOOK_AUTO_REGISTER="true"
-MONDAY_WEBHOOK_REGISTER_BOARD_IDS="2114546416"
+# Use parent board ID for subitem workflows (not always the ID shown in URL).
+MONDAY_WEBHOOK_REGISTER_BOARD_IDS="2116143116"
 MONDAY_WEBHOOK_EVENT="change_specific_column_value"
 MONDAY_WEBHOOK_REGISTER_SUBITEMS="true"
+MONDAY_WEBHOOK_MANAGED_STATE_FILE=".monday/managed-webhooks.json"
 
 MONDAY_AGENT_BRANCH_PREFIX="dev/monday"
 MONDAY_AGENT_BRANCH_PREFIX_RULES="bugs=fix,epics backlog=feat"

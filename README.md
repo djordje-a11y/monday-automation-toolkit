@@ -1,82 +1,91 @@
-# Monday Automation Toolkit
+# Monday Automation Toolkit (Standalone)
 
-Local standalone toolkit for monday -> local agent automation, reusable across any git workspace.
+Reusable monday -> local agent automation for any git workspace.
 
-## What this solves
+This toolkit is intentionally **outside product repos** and writes local runtime files under each workspace's `.monday/` folder.
 
-- Keeps automation code outside product repos.
-- Uses a stable handoff path for Cursor `@`:
+## What you get
+
+- One CLI for all operations: `monday-auto`
+- Workspace-scoped execution (`--workspace /path/to/repo`)
+- Stable handoff markdown path for Cursor `@`:
   - `.monday/handoffs/<branch-flat>.agent-handoff.md`
-- Keeps generated files untracked via workspace-local `.git/info/exclude`.
+- Local-only files ignored through `.git/info/exclude` (no product repo pollution)
 
-## Commands
+## Quick Start
 
-```bash
-monday-auto init --workspace /path/to/repo
-monday-auto check --workspace /path/to/repo
-monday-auto start --workspace /path/to/repo
-monday-auto stop --workspace /path/to/repo
-```
-
-Optional direct commands:
-
-```bash
-monday-auto bridge --workspace /path/to/repo
-monday-auto intake --workspace /path/to/repo --item-id 123 --dispatch
-```
-
-## One-time setup
-
-From toolkit root:
+1. Install CLI once:
 
 ```bash
 cd /path/to/monday-automation-toolkit
 npm link
 ```
 
-Initialize a target workspace (adds local ignore entries and local folders):
+2. Initialize a target workspace:
 
 ```bash
 monday-auto init --workspace /path/to/repo
 ```
 
-Creates:
-
-- `/path/to/repo/.monday/handoffs`
-- `/path/to/repo/.monday/intake`
-
-And appends to `/path/to/repo/.git/info/exclude`:
-
-- `.monday/`
-- `.monday.local`
-
-## Workspace config
-
-In each target repo, create `.monday.local` with your monday token and workflow config.
-
-Typical trigger command:
+3. Create workspace config:
 
 ```bash
-MONDAY_ON_MATCH_COMMAND='node "/path/to/monday-automation-toolkit/scripts/monday-agent-intake.js" --item-id "$MONDAY_TRIGGER_ITEM_ID" --dispatch'
+cp /path/to/monday-automation-toolkit/.monday.local.example /path/to/repo/.monday.local
 ```
 
-If `MONDAY_ON_MATCH_COMMAND` is omitted, the bridge defaults to the same toolkit intake command automatically.
+4. Validate config:
 
-## Handoff file location
+```bash
+monday-auto check --workspace /path/to/repo
+```
 
-By default intake writes:
+5. Start automation:
+
+```bash
+monday-auto start --workspace /path/to/repo
+```
+
+6. Stop automation:
+
+```bash
+monday-auto stop --workspace /path/to/repo
+```
+
+## Commands
+
+```bash
+monday-auto init   --workspace /path/to/repo
+monday-auto check  --workspace /path/to/repo
+monday-auto start  --workspace /path/to/repo
+monday-auto stop   --workspace /path/to/repo
+monday-auto bridge --workspace /path/to/repo
+monday-auto intake --workspace /path/to/repo --item-id 123 --dispatch
+```
+
+## Generated files
+
+Per workspace, the toolkit writes:
 
 - `.monday/intake/<item>-<slug>-<timestamp>.prompt.md`
 - `.monday/intake/<item>-<slug>-<timestamp>.context.json`
 - `.monday/handoffs/<branch-flat>.agent-handoff.md`
+- `.monday/runtime.json`
+- `.monday/managed-webhooks.json`
 
-Use in Cursor Agent chat:
+In Cursor Agent chat, attach:
 
 ```text
 @.monday/handoffs/<branch-flat>.agent-handoff.md
 ```
 
-## Notes
+## Full Team Guide
 
-- `start` reuses healthy existing bridge/tunnel processes.
-- `stop` cleans stale bridge/tunnel processes using runtime PIDs first, then process discovery fallback.
+For a complete from-scratch onboarding flow (including how to find monday board/group/user/column IDs and the subitem parent-board gotcha), read:
+
+- `TEAM_SETUP_GUIDE.md`
+
+## Additional references
+
+- `MONDAY_AGENT_AUTOMATION_REQUIREMENTS.md`
+- `MONDAY_WEBHOOK_BRIDGE.md`
+- `MONDAY_AGENT_INTAKE.md`
