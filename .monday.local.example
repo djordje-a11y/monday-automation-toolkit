@@ -41,6 +41,8 @@ MONDAY_AGENT_OUTPUT_DIR=".monday/intake"
 MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"
 # Stable chat attach target in repo root (use `@monday-handoff.md`).
 MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"
+# When same ticket retriggers, rewrite handoff to latest monday comment only.
+MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY="true"
 
 MONDAY_AGENT_COMMAND='$HOME/.local/bin/cursor-agent --mode plan --workspace "$PWD" "Read $MONDAY_AGENT_IDE_HANDOFF_FILE and return required sections."'
 
@@ -51,3 +53,4 @@ MONDAY_AGENT_COMMAND='$HOME/.local/bin/cursor-agent --mode plan --workspace "$PW
 # MONDAY_AGENT_UNSET_CURSOR_API_KEY="true"
 # MONDAY_AGENT_HEADLESS_PRINT="false"
 # MONDAY_AGENT_HANDOFF_ALIAS_FILE="false"
+# MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER="true" # legacy alias

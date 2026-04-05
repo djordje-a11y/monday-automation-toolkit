@@ -10,8 +10,11 @@ This toolkit is intentionally **outside product repos** and writes local runtime
 - Workspace-scoped execution (`--workspace /path/to/repo`)
 - Stable easy-attach handoff alias for Cursor `@`:
   - `monday-handoff.md`
-- Branch-specific handoff history:
+- Branch-specific handoff file:
   - `.monday/handoffs/<branch-flat>.agent-handoff.md`
+- Safe retrigger behavior:
+  - existing ticket branch is reused (not reset from base)
+  - handoff is rewritten with latest monday comment only
 - Local-only files ignored through `.git/info/exclude` (no product repo pollution)
 
 ## Quick Start
@@ -86,6 +89,10 @@ monday-auto start --workspace /path/to/repo
 monday-auto stop --workspace /path/to/repo
 ```
 
+Important git safety note:
+- Intake branch prep requires a clean tracked working tree by default (`MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`).
+- If tracked files are dirty, branch preparation is blocked.
+
 ## Commands
 
 ```bash
@@ -111,13 +118,15 @@ Per workspace, the toolkit writes:
 - `.monday/runtime.json`
 - `.monday/managed-webhooks.json`
 
+When the same ticket retriggers, the existing branch is reused and handoff files are rewritten to include only the latest monday comment (to minimize repeated agent input).
+
 In Cursor Agent chat, attach the stable alias:
 
 ```text
 @monday-handoff.md
 ```
 
-If needed, you can still attach a specific history file from `.monday/handoffs/`.
+If needed, you can still attach a specific branch handoff file from `.monday/handoffs/`.
 
 ## Full Setup Guide
 

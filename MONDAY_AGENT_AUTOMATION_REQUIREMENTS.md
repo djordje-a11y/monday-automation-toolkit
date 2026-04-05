@@ -38,6 +38,8 @@ This file is a compact checklist for reviewers and operators.
 - Use strict git safety:
   - `MONDAY_AGENT_GIT_PREPARE_BRANCH=true`
   - `MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`
+- Keep retrigger behavior safe:
+  - `MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY=true`
 
 ## Operational commands
 
@@ -52,10 +54,14 @@ monday-auto stop --workspace /path/to/repo
 After monday status changes to trigger value:
 
 1. Bridge logs matched item and dispatch.
-2. Intake prepares/switches git branch.
-3. Branch-history handoff file is written:
+2. Intake prepares/switches git branch (blocked if tracked worktree is dirty).
+3. Branch handoff file is written:
    - `.monday/handoffs/<branch-flat>.agent-handoff.md`
 4. Stable alias file is updated:
    - `monday-handoff.md`
 5. Cursor Agent can use:
    - `@monday-handoff.md`
+
+For same-ticket retriggers:
+- existing branch is reused (not reset to base)
+- handoff files contain only the latest monday comment context

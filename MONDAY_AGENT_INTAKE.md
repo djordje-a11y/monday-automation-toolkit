@@ -19,7 +19,7 @@ monday-auto intake --workspace /path/to/repo --item-id 123456789 --dispatch
 
 - `.monday/intake/<itemId>-<slug>-<timestamp>.prompt.md`
 - `.monday/intake/<itemId>-<slug>-<timestamp>.context.json`
-- `.monday/handoffs/<branch-flat>.agent-handoff.md` (branch-specific history)
+- `.monday/handoffs/<branch-flat>.agent-handoff.md` (branch-specific handoff file)
 - `monday-handoff.md` (stable latest alias for easy `@`)
 
 Handoff paths are printed as:
@@ -44,8 +44,14 @@ MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE="true"
 MONDAY_AGENT_OUTPUT_DIR=".monday/intake"
 MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"
 MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"
+MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY="true"
 MONDAY_AGENT_IDE_HANDOFF="true"
 ```
+
+Branch safety behavior:
+- Clean tracked working tree is required by default (`MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`).
+- If target branch already exists (local or remote), intake reuses it instead of resetting from base.
+- For same-ticket retriggers, handoff files are rewritten to latest-comment-only context.
 
 Dispatch-related:
 
@@ -65,7 +71,7 @@ Use the handoff markdown in sidebar Agent chat:
 ```
 
 This gives the agent ticket context + rules in one stable file path.
-Branch-specific copies are still available under `.monday/handoffs/`.
+Branch-specific handoff files are available under `.monday/handoffs/`.
 
 ## Agent command env vars
 
@@ -83,6 +89,8 @@ Available inside `MONDAY_AGENT_COMMAND`:
 - `MONDAY_AGENT_GIT_REMOTE`
 - `MONDAY_AGENT_PREPARED_BRANCH`
 - `MONDAY_AGENT_PREPARED_HEAD_SHA`
+- `MONDAY_AGENT_PREPARED_BRANCH_REUSED`
+- `MONDAY_AGENT_PREPARED_BRANCH_SOURCE`
 
 ## Branch rule notes
 

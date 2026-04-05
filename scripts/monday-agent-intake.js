@@ -9,6 +9,7 @@
  * 4) Write timestamped .prompt.md / .context.json plus IDE handoff files:
  *    - branch history: `<handoffDir>/<branch-with-slashes-as-hyphens>.agent-handoff.md`
  *    - stable alias: `<repo-root>/monday-handoff.md` (default) for easy @ attach
+ *    - on same-ticket retrigger with existing branch: write latest-update-only handoff
  * 5) Optionally run a configured agent command with prompt/context paths.
  *
  * This script is designed to be called from monday-webhook-bridge:
@@ -58,6 +59,7 @@ const DEFAULT_MAX_UPDATES = 20;
 const DEFAULT_OUTPUT_DIR = '.monday/intake';
 const DEFAULT_HANDOFF_DIR = '.monday/handoffs';
 const DEFAULT_HANDOFF_ALIAS_FILE = 'monday-handoff.md';
+const DEFAULT_HANDOFF_RETRIGGER_LATEST_ONLY = true;
 const DEFAULT_BRANCH_PREFIX = 'dev/monday';
 const DEFAULT_BRANCH_PREFIX_RULES = 'bugs=fix,epics backlog=feat';
 const DEFAULT_BRANCH_INCLUDE_TICKET_ID = false;
@@ -323,6 +325,8 @@ async function loadMondayEnvValues(args) {
     'MONDAY_AGENT_OUTPUT_DIR',
     'MONDAY_AGENT_HANDOFF_DIR',
     'MONDAY_AGENT_HANDOFF_ALIAS_FILE',
+    'MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY',
+    'MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER',
     'MONDAY_AGENT_RULES_FILE',
     'MONDAY_AGENT_BRANCH_PREFIX',
     'MONDAY_AGENT_BRANCH_PREFIX_RULES',
@@ -410,6 +414,19 @@ function buildRuntimeConfig(args, envValues) {
           DEFAULT_HANDOFF_ALIAS_FILE,
       ),
       DEFAULT_HANDOFF_ALIAS_FILE,
+    ),
+    handoffRetriggerLatestOnly: parseBoolean(
+      getOptionalArg(
+        args,
+        'handoff-retrigger-latest-only',
+        String(args['handoff-append-last-update-on-retrigger'] || '').trim() ||
+          process.env.MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY ||
+          envValues.MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY ||
+          process.env.MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER ||
+          envValues.MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER ||
+          String(DEFAULT_HANDOFF_RETRIGGER_LATEST_ONLY),
+      ),
+      DEFAULT_HANDOFF_RETRIGGER_LATEST_ONLY,
     ),
     dispatch: parseBoolean(getOptionalArg(args, 'dispatch', 'false'), false) || Boolean(args.dispatch),
     agentCommand: getOptionalArg(
@@ -724,7 +741,7 @@ function sanitizeBranchForHandoffFilename(branch) {
 function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, archiveHandoffPath, promptText }) {
   const archiveLine =
     archiveHandoffPath && archiveHandoffPath !== relativeHandoffPath
-      ? `- **Branch-specific history file:** \`${archiveHandoffPath}\``
+      ? `- **Branch-specific handoff file:** \`${archiveHandoffPath}\``
       : '';
   return [
     '# Cursor IDE Agent — Monday handoff',
@@ -735,7 +752,7 @@ function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, archiveHandoffP
     `- **This file (repo-relative):** \`${relativeHandoffPath}\``,
     ...(archiveLine ? [archiveLine] : []),
     '',
-    'Branch history files are kept in `.monday/handoffs/` and the stable alias is refreshed on each run.',
+    'Branch handoff files are kept in `.monday/handoffs/` and the stable alias is refreshed on each run.',
     '',
     '---',
     '',
@@ -747,6 +764,121 @@ function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, archiveHandoffP
 function resolveRepoRelativePath(absolutePath) {
   const rel = path.relative(process.cwd(), absolutePath);
   return rel.split(path.sep).join('/');
+}
+
+function ensureTrailingNewline(text) {
+  const raw = String(text || '');
+  if (!raw) return '\n';
+  return raw.endsWith('\n') ? raw : `${raw}\n`;
+}
+
+function normalizeUpdateText(value) {
+  const html = String(value || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&#39;/gi, "'")
+    .replace(/&quot;/gi, '"');
+  return html
+    .split(/\r?\n/)
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 4000);
+}
+
+function pickLatestUpdate(updates) {
+  const entries = Array.isArray(updates) ? updates : [];
+  if (entries.length === 0) return null;
+
+  const ranked = entries.map((entry, index) => {
+    const timestamp = Date.parse(String(entry?.createdAt || entry?.created_at || '').trim());
+    return {
+      entry,
+      index,
+      timestamp: Number.isFinite(timestamp) ? timestamp : Number.NEGATIVE_INFINITY,
+    };
+  });
+
+  ranked.sort((a, b) => {
+    if (b.timestamp !== a.timestamp) return b.timestamp - a.timestamp;
+    return a.index - b.index;
+  });
+
+  return ranked[0]?.entry || entries[0] || null;
+}
+
+function extractLatestUpdateDetails(context) {
+  const latestUpdate = pickLatestUpdate(context?.updates);
+  if (!latestUpdate) {
+    return {
+      found: false,
+      id: 'unknown',
+      createdAt: 'unknown',
+      author: 'unknown',
+      text: '(No monday updates found for this retrigger.)',
+    };
+  }
+
+  const updateId = String(latestUpdate?.id || '').trim();
+  const updateCreatedAt = String(latestUpdate?.createdAt || latestUpdate?.created_at || '').trim();
+  const updateAuthor = String(latestUpdate?.creator?.name || '').trim() || 'unknown';
+  const updateText = normalizeUpdateText(latestUpdate?.textBody || latestUpdate?.text_body || '');
+
+  return {
+    found: true,
+    id: updateId || 'unknown',
+    createdAt: updateCreatedAt || 'unknown',
+    author: updateAuthor,
+    text: updateText || '(empty update text)',
+  };
+}
+
+function buildRetriggerLatestOnlyPrompt({
+  context,
+  branchLabel,
+  promptPath,
+  contextPath,
+  latestUpdate,
+}) {
+  return [
+    `Ticket #${context.ticket.id} — ${context.ticket.title}`,
+    '',
+    '## Retrigger intake mode',
+    'Same-ticket retrigger detected. This handoff intentionally includes only the latest monday update to avoid re-sending full task context.',
+    '',
+    '## Ticket',
+    `- Ticket ID: ${context.ticket.id}`,
+    `- Ticket title: ${context.ticket.title}`,
+    `- Ticket status: ${context.ticket.status || '(unknown)'}`,
+    `- Branch: ${branchLabel}`,
+    '',
+    '## Latest monday update',
+    `- Update ID: ${latestUpdate.id}`,
+    `- Update time: ${latestUpdate.createdAt}`,
+    `- Update author: ${latestUpdate.author}`,
+    '',
+    '```text',
+    latestUpdate.text,
+    '```',
+    '',
+    '## Optional full artifacts (only if needed)',
+    `- Full prompt artifact: \`${promptPath}\``,
+    `- Full context artifact: \`${contextPath}\``,
+    '',
+    '## Required Output (exact sections)',
+    '1. What changed in this latest comment',
+    '2. Code changes needed on the current branch',
+    '3. Validation steps for this delta',
+    '4. Risks or questions',
+    '',
+    'Do not restate previously solved context unless needed for this delta.',
+    '',
+  ].join('\n');
 }
 
 function resolveSectionContext(item) {
@@ -919,6 +1051,20 @@ function parseAheadBehind(value) {
   return { ahead, behind };
 }
 
+async function hasGitRef(ref, config) {
+  try {
+    await runGit(['show-ref', '--verify', '--quiet', ref], config);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function remoteBranchExists(remote, branch, config) {
+  const output = await runGit(['ls-remote', '--heads', remote, branch], config);
+  return Boolean(String(output || '').trim());
+}
+
 async function prepareGitBranch(config, branchName) {
   const baseBranch = String(config.gitBaseBranch || DEFAULT_GIT_BASE_BRANCH).trim();
   const remote = String(config.gitRemote || DEFAULT_GIT_REMOTE).trim();
@@ -941,18 +1087,51 @@ async function prepareGitBranch(config, branchName) {
     }
   }
 
+  const hasLocalTargetBranch = await hasGitRef(`refs/heads/${targetBranch}`, config);
+  if (hasLocalTargetBranch) {
+    print(
+      `Reusing existing local branch '${targetBranch}' (safe mode: no reset from base).`,
+      colors.yellow,
+    );
+    await runGit(['checkout', targetBranch], config);
+    const headSha = await runGit(['rev-parse', '--short', 'HEAD'], config);
+    return {
+      baseBranch,
+      remote,
+      preparedBranch: targetBranch,
+      headSha,
+      reusedExistingBranch: true,
+      branchSource: 'local-existing',
+    };
+  }
+
+  if (await remoteBranchExists(remote, targetBranch, config)) {
+    print(
+      `Reusing existing remote branch '${remote}/${targetBranch}' (safe mode: no reset from base).`,
+      colors.yellow,
+    );
+    await runGit(['fetch', remote, targetBranch], config);
+    await runGit(['checkout', '-B', targetBranch, `${remote}/${targetBranch}`], config);
+    const headSha = await runGit(['rev-parse', '--short', 'HEAD'], config);
+    return {
+      baseBranch,
+      remote,
+      preparedBranch: targetBranch,
+      headSha,
+      reusedExistingBranch: true,
+      branchSource: 'remote-existing',
+    };
+  }
+
   print(`Preparing git base branch '${baseBranch}' from '${remote}'...`, colors.cyan);
   await runGit(['fetch', remote, baseBranch], config);
 
   const remoteRef = `refs/remotes/${remote}/${baseBranch}`;
-  await runGit(['show-ref', '--verify', '--quiet', remoteRef], config);
-
-  let hasLocalBaseBranch = true;
-  try {
-    await runGit(['show-ref', '--verify', '--quiet', `refs/heads/${baseBranch}`], config);
-  } catch {
-    hasLocalBaseBranch = false;
+  if (!(await hasGitRef(remoteRef, config))) {
+    fail(`Remote base branch not found: ${remote}/${baseBranch}`);
   }
+
+  const hasLocalBaseBranch = await hasGitRef(`refs/heads/${baseBranch}`, config);
 
   if (hasLocalBaseBranch) {
     await runGit(['checkout', baseBranch], config);
@@ -993,6 +1172,8 @@ async function prepareGitBranch(config, branchName) {
     remote,
     preparedBranch: targetBranch,
     headSha,
+    reusedExistingBranch: false,
+    branchSource: 'remote-base',
   };
 }
 
@@ -1229,16 +1410,35 @@ async function writeIntakeFiles(config, context, promptText) {
   let handoffPath = '';
   let handoffBaseName = '';
   let handoffAliasPath = '';
+  let handoffWriteMode = 'full-ticket';
+  let retriggerUpdate = null;
   if (config.ideHandoff) {
+    const shouldUseRetriggerLatestOnly = Boolean(
+      config.handoffRetriggerLatestOnly && context.gitPreparation?.reusedExistingBranch,
+    );
+    if (shouldUseRetriggerLatestOnly) {
+      handoffWriteMode = 'retrigger-latest-only';
+      retriggerUpdate = extractLatestUpdateDetails(context);
+    }
+
     handoffBaseName = `${sanitizeBranchForHandoffFilename(branchLabel)}.agent-handoff`;
     handoffPath = path.join(handoffDir, `${handoffBaseName}.md`);
+    const handoffPrompt = shouldUseRetriggerLatestOnly
+      ? buildRetriggerLatestOnlyPrompt({
+          context,
+          branchLabel,
+          promptPath: resolveRepoRelativePath(promptPath),
+          contextPath: resolveRepoRelativePath(contextPath),
+          latestUpdate: retriggerUpdate || extractLatestUpdateDetails(context),
+        })
+      : promptText;
     const handoffBody = buildIdeHandoffBody({
       branchLabel,
       relativeHandoffPath: resolveRepoRelativePath(handoffPath),
       archiveHandoffPath: '',
-      promptText,
+      promptText: handoffPrompt,
     });
-    await fs.writeFile(handoffPath, handoffBody, 'utf8');
+    await fs.writeFile(handoffPath, ensureTrailingNewline(handoffBody), 'utf8');
 
     if (config.handoffAliasFile) {
       handoffAliasPath = path.isAbsolute(config.handoffAliasFile)
@@ -1249,9 +1449,9 @@ async function writeIntakeFiles(config, context, promptText) {
         branchLabel,
         relativeHandoffPath: resolveRepoRelativePath(handoffAliasPath),
         archiveHandoffPath: resolveRepoRelativePath(handoffPath),
-        promptText,
+        promptText: handoffPrompt,
       });
-      await fs.writeFile(handoffAliasPath, aliasBody, 'utf8');
+      await fs.writeFile(handoffAliasPath, ensureTrailingNewline(aliasBody), 'utf8');
     }
   }
 
@@ -1264,6 +1464,15 @@ async function writeIntakeFiles(config, context, promptText) {
     handoffPath: handoffPath || null,
     handoffBaseName: handoffBaseName || null,
     handoffAliasPath: handoffAliasPath || null,
+    handoffWriteMode,
+    retriggerUpdate: retriggerUpdate
+      ? {
+          found: Boolean(retriggerUpdate.found),
+          id: retriggerUpdate.id,
+          createdAt: retriggerUpdate.createdAt,
+          author: retriggerUpdate.author,
+        }
+      : null,
   };
 }
 
@@ -1300,6 +1509,8 @@ async function dispatchAgent(config, files, context, gitPreparation) {
     MONDAY_AGENT_GIT_REMOTE: String(gitPreparation?.remote || ''),
     MONDAY_AGENT_PREPARED_BRANCH: String(gitPreparation?.preparedBranch || ''),
     MONDAY_AGENT_PREPARED_HEAD_SHA: String(gitPreparation?.headSha || ''),
+    MONDAY_AGENT_PREPARED_BRANCH_REUSED: String(Boolean(gitPreparation?.reusedExistingBranch)),
+    MONDAY_AGENT_PREPARED_BRANCH_SOURCE: String(gitPreparation?.branchSource || ''),
   });
 
   if (config.unsetCursorApiKey && String(process.env.CURSOR_API_KEY || '').trim()) {
@@ -1356,6 +1567,8 @@ function printUsage() {
   print('  --output-dir <dir>');
   print('  --handoff-dir <dir>');
   print('  --handoff-alias-file <path|false> (default monday-handoff.md)');
+  print('  --handoff-retrigger-latest-only true|false (default true)');
+  print('  --handoff-append-last-update-on-retrigger true|false (legacy alias)');
   print('  --rules-file <path>');
   print('  --branch-prefix <prefix>');
   print('  --branch-prefix-rules "id:bugs=fix,id:epics_backlog=feat,bugs=fix,epics backlog=feat"');
@@ -1378,6 +1591,8 @@ function printUsage() {
   print('  MONDAY_AGENT_OUTPUT_DIR');
   print('  MONDAY_AGENT_HANDOFF_DIR');
   print('  MONDAY_AGENT_HANDOFF_ALIAS_FILE');
+  print('  MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY');
+  print('  MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER (legacy alias)');
   print('  MONDAY_AGENT_RULES_FILE');
   print('  MONDAY_AGENT_BRANCH_PREFIX');
   print('  MONDAY_AGENT_BRANCH_PREFIX_RULES');
@@ -1447,8 +1662,11 @@ async function main(argv = process.argv) {
 
   if (config.dispatch && config.gitPrepareBranch) {
     gitPreparation = await prepareGitBranch(config, branchCandidate);
+    const branchMode = gitPreparation.reusedExistingBranch
+      ? `reused existing (${gitPreparation.branchSource})`
+      : `created from ${gitPreparation.remote}/${gitPreparation.baseBranch}`;
     print(
-      `Git prepared: base=${gitPreparation.baseBranch} remote=${gitPreparation.remote} branch=${gitPreparation.preparedBranch} @ ${gitPreparation.headSha}`,
+      `Git prepared: base=${gitPreparation.baseBranch} remote=${gitPreparation.remote} branch=${gitPreparation.preparedBranch} @ ${gitPreparation.headSha} [${branchMode}]`,
       colors.green,
     );
   } else if (config.dispatch && !config.gitPrepareBranch) {
@@ -1494,6 +1712,21 @@ async function main(argv = process.argv) {
       colors.green,
     );
   }
+  if (files.handoffWriteMode === 'retrigger-latest-only') {
+    print(
+      'Retrigger mode: handoff rewritten to latest monday update only (full ticket context intentionally omitted).',
+      colors.yellow,
+    );
+    if (files.retriggerUpdate) {
+      print(
+        `Latest monday update: id=${files.retriggerUpdate.id} at ${files.retriggerUpdate.createdAt} by ${files.retriggerUpdate.author}`,
+        colors.dim,
+      );
+    }
+    if (files.retriggerUpdate && !files.retriggerUpdate.found) {
+      print('No monday updates found; handoff contains minimal retrigger metadata only.', colors.dim);
+    }
+  }
   print(
     `Section: ${sectionContext.sectionTitle || '(unknown)'} [id=${sectionContext.sectionId || '(none)'}] (${sectionContext.source}) -> prefix ${resolvedPrefix}`,
     colors.green,
@@ -1509,8 +1742,13 @@ async function main(argv = process.argv) {
   }
   print(`Branch candidate: ${branchCandidate}`, colors.green);
   if (gitPreparation) {
+    const preparedSource = gitPreparation.reusedExistingBranch
+      ? gitPreparation.branchSource === 'remote-existing'
+        ? `existing remote branch ${gitPreparation.remote}/${gitPreparation.preparedBranch}`
+        : 'existing local branch'
+      : `${gitPreparation.remote}/${gitPreparation.baseBranch}`;
     print(
-      `Prepared git branch: ${gitPreparation.preparedBranch} (from ${gitPreparation.remote}/${gitPreparation.baseBranch})`,
+      `Prepared git branch: ${gitPreparation.preparedBranch} (from ${preparedSource})`,
       colors.green,
     );
   }

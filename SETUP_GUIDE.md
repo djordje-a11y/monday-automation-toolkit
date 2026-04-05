@@ -207,6 +207,7 @@ Strict baseline required values (recommended for team rollout):
 - `MONDAY_WEBHOOK_AUTO_REGISTER=true`
 - `MONDAY_WEBHOOK_REGISTER_BOARD_IDS=<board-id-list>`
 - `MONDAY_REQUIRE_LOCAL_IGNORES=true`
+- `MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`
 
 Why both board variables:
 
@@ -224,6 +225,7 @@ For easy Cursor `@`:
 - `MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"`
 - `MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"`
 - `MONDAY_AGENT_IDE_HANDOFF="true"`
+- `MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY="true"`
 
 ### 5.1 Extended options (optional / compatibility)
 
@@ -235,6 +237,7 @@ These additional options are supported when you need explicit override behavior:
 - `MONDAY_AGENT_RULES_FILE` to load custom ticket rules text
 - `MONDAY_AGENT_UNSET_CURSOR_API_KEY` to force login-session auth behavior for `cursor-agent`
 - `MONDAY_AGENT_HEADLESS_PRINT` to control terminal-only output vs interactive behavior
+- `MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY` to control retrigger handoff minimization (legacy alias: `MONDAY_AGENT_HANDOFF_APPEND_LAST_UPDATE_ON_RETRIGGER`)
 
 ### 5.2 Runtime flow and variable contract (exact sequence)
 
@@ -259,9 +262,12 @@ These additional options are supported when you need explicit override behavior:
 5. **Intake processing**
    - Requires token + `--item-id`.
    - Writes prompt/context to `MONDAY_AGENT_OUTPUT_DIR` (default `.monday/intake`).
-   - Writes branch-history handoff to `MONDAY_AGENT_HANDOFF_DIR` (default `.monday/handoffs`) when `MONDAY_AGENT_IDE_HANDOFF=true`.
+   - Writes branch handoff file to `MONDAY_AGENT_HANDOFF_DIR` (default `.monday/handoffs`) when `MONDAY_AGENT_IDE_HANDOFF=true`.
    - Writes stable attach alias to `MONDAY_AGENT_HANDOFF_ALIAS_FILE` (default `monday-handoff.md`).
-   - Prepares git branch using `MONDAY_AGENT_GIT_*` (defaults: `acceptance`, `origin`, clean worktree required).
+   - Prepares git branch using `MONDAY_AGENT_GIT_*` (defaults: `acceptance`, `origin`, clean tracked worktree required).
+   - If tracked files are dirty, branch prep is intentionally blocked (`MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`).
+   - If the same ticket branch already exists, intake reuses that branch (no reset to base).
+   - On retrigger, handoff files are rewritten to latest-comment-only when `MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY=true`.
 
 6. **Agent dispatch**
    - Runs `MONDAY_AGENT_COMMAND`.
@@ -308,8 +314,13 @@ After changing status to trigger value, terminal should show:
 
 - matched item
 - prepared git branch
-- branch-history handoff file path
+- branch handoff file path
 - stable handoff alias path
+
+If you retrigger the same ticket:
+
+- branch should be reused (not recreated from base)
+- handoff should contain only the latest monday comment context (not full task package)
 
 Example handoff line:
 
@@ -326,7 +337,7 @@ Then in Cursor Agent chat use:
 ```
 
 The markdown contains ticket context + rules.
-If needed, you can still attach a specific history file from `.monday/handoffs/`.
+If needed, you can still attach a specific branch handoff file from `.monday/handoffs/`.
 
 ## 10) Stop automation
 
@@ -349,7 +360,7 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
 
 - **No handoff file visible in explorer**  
   Use `@monday-handoff.md` first (repo root alias).  
-  For history files, open by path directly (`Ctrl+P`) and use `.monday/handoffs/...` if hidden files are collapsed.
+  For branch handoff files, open by path directly (`Ctrl+P`) and use `.monday/handoffs/...` if hidden files are collapsed.
 
 - **`EADDRINUSE` on 8787**  
   Run `monday-auto stop ...` then restart. The launcher also reuses healthy bridge/tunnel processes automatically.
@@ -380,4 +391,9 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
   Check assignee/routing settings and IDs.
 
 - **Git branch preparation blocked**  
-  Ensure target workspace has clean tracked changes (or set `MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=false` intentionally).
+  Ensure target workspace has clean tracked changes. This is required by default (`MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`).  
+  Only disable it intentionally if your team accepts branch-switch risk.
+
+- **Same ticket retrigger rewrote my branch unexpectedly**  
+  Use latest toolkit behavior with `MONDAY_AGENT_HANDOFF_RETRIGGER_LATEST_ONLY=true` (default) and keep `MONDAY_AGENT_GIT_PREPARE_BRANCH=true`.  
+  Existing branch should be reused safely; retrigger handoff should include only latest monday comment.
