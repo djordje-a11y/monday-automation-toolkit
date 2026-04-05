@@ -14,7 +14,10 @@ This file is a compact checklist for reviewers and operators.
 - Workspace `.monday.local` configured with:
   - `MONDAY_API_TOKEN`
   - `MONDAY_WEBHOOK_SECRET`
+  - `MONDAY_BOARD_ID`
+  - `MONDAY_ALLOWED_BOARD_IDS`
   - `MONDAY_TRIGGER_STATUS`
+  - `MONDAY_STATUS_COLUMN_ID`
   - `MONDAY_AGENT_COMMAND`
 - ngrok authenticated (`ngrok config add-authtoken ...`)
 
@@ -28,7 +31,10 @@ This file is a compact checklist for reviewers and operators.
 - Keep handoff paths predictable:
   - `MONDAY_AGENT_OUTPUT_DIR=".monday/intake"`
   - `MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"`
+  - `MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"`
   - `MONDAY_AGENT_IDE_HANDOFF=true`
+- Enforce local-only generated artifacts:
+  - `MONDAY_REQUIRE_LOCAL_IGNORES=true`
 - Use strict git safety:
   - `MONDAY_AGENT_GIT_PREPARE_BRANCH=true`
   - `MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE=true`
@@ -47,7 +53,9 @@ After monday status changes to trigger value:
 
 1. Bridge logs matched item and dispatch.
 2. Intake prepares/switches git branch.
-3. Handoff file is written:
+3. Branch-history handoff file is written:
    - `.monday/handoffs/<branch-flat>.agent-handoff.md`
-4. Cursor Agent can use:
-   - `@.monday/handoffs/<branch-flat>.agent-handoff.md`
+4. Stable alias file is updated:
+   - `monday-handoff.md`
+5. Cursor Agent can use:
+   - `@monday-handoff.md`

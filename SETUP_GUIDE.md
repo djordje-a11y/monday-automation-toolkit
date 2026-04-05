@@ -83,6 +83,7 @@ And appends to local-only ignore file:
 
 - `.monday/`
 - `.monday.local`
+- `monday-handoff.md`
 
 in `/path/to/your/repo/.git/info/exclude`.
 
@@ -205,6 +206,7 @@ Strict baseline required values (recommended for team rollout):
 - `MONDAY_AGENT_COMMAND`
 - `MONDAY_WEBHOOK_AUTO_REGISTER=true`
 - `MONDAY_WEBHOOK_REGISTER_BOARD_IDS=<board-id-list>`
+- `MONDAY_REQUIRE_LOCAL_IGNORES=true`
 
 Why both board variables:
 
@@ -220,6 +222,7 @@ For easy Cursor `@`:
 
 - `MONDAY_AGENT_OUTPUT_DIR=".monday/intake"`
 - `MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"`
+- `MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"`
 - `MONDAY_AGENT_IDE_HANDOFF="true"`
 
 ### 5.1 Extended options (optional / compatibility)
@@ -256,7 +259,8 @@ These additional options are supported when you need explicit override behavior:
 5. **Intake processing**
    - Requires token + `--item-id`.
    - Writes prompt/context to `MONDAY_AGENT_OUTPUT_DIR` (default `.monday/intake`).
-   - Writes handoff to `MONDAY_AGENT_HANDOFF_DIR` (default `.monday/handoffs`) when `MONDAY_AGENT_IDE_HANDOFF=true`.
+   - Writes branch-history handoff to `MONDAY_AGENT_HANDOFF_DIR` (default `.monday/handoffs`) when `MONDAY_AGENT_IDE_HANDOFF=true`.
+   - Writes stable attach alias to `MONDAY_AGENT_HANDOFF_ALIAS_FILE` (default `monday-handoff.md`).
    - Prepares git branch using `MONDAY_AGENT_GIT_*` (defaults: `acceptance`, `origin`, clean worktree required).
 
 6. **Agent dispatch**
@@ -304,19 +308,25 @@ After changing status to trigger value, terminal should show:
 
 - matched item
 - prepared git branch
-- handoff file path
+- branch-history handoff file path
+- stable handoff alias path
 
 Example handoff line:
 
 `IDE handoff (@ this file in Cursor Agent): .monday/handoffs/<branch-flat>.agent-handoff.md`
 
+Example stable alias line:
+
+`Stable handoff alias (@ this file in Cursor Agent): monday-handoff.md`
+
 Then in Cursor Agent chat use:
 
 ```text
-@.monday/handoffs/<branch-flat>.agent-handoff.md
+@monday-handoff.md
 ```
 
 The markdown contains ticket context + rules.
+If needed, you can still attach a specific history file from `.monday/handoffs/`.
 
 ## 10) Stop automation
 
@@ -338,7 +348,8 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
 ## Troubleshooting
 
 - **No handoff file visible in explorer**  
-  Open by path directly (`Ctrl+P`) and use `.monday/handoffs/...`. Hidden/ignored files may be collapsed in UI.
+  Use `@monday-handoff.md` first (repo root alias).  
+  For history files, open by path directly (`Ctrl+P`) and use `.monday/handoffs/...` if hidden files are collapsed.
 
 - **`EADDRINUSE` on 8787**  
   Run `monday-auto stop ...` then restart. The launcher also reuses healthy bridge/tunnel processes automatically.
@@ -349,6 +360,10 @@ monday-auto stop --workspace /path/to/your/repo --dry-run
 - **Fail: board scope is missing**  
   Set board scope explicitly with `MONDAY_ALLOWED_BOARD_IDS` and/or `MONDAY_BOARD_ID`.  
   If you use auto-register, ensure `MONDAY_WEBHOOK_REGISTER_BOARD_IDS` is also set.
+
+- **Fail: local ignores are missing**  
+  Run `monday-auto init --workspace /path/to/your/repo` to append required local excludes.
+  (Or add `.monday/`, `.monday.local`, and `monday-handoff.md` in `.git/info/exclude` or `.gitignore`.)
 
 - **`npm link` fails with `EACCES` (`/usr/local/lib/node_modules`)**  
   Configure user-scoped npm globals and retry:

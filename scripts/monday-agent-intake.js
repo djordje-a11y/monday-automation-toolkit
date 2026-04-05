@@ -6,8 +6,9 @@
  * 1) Fetch ticket details from monday (item, column values, updates, assets).
  * 2) Build a structured context JSON + prompt markdown.
  * 3) Propose deterministic branch name candidate.
- * 4) Write timestamped .prompt.md / .context.json plus optional IDE handoff:
- *    `<outputDir>/<branch-with-slashes-as-hyphens>.agent-handoff.md` for @ in Cursor Agent.
+ * 4) Write timestamped .prompt.md / .context.json plus IDE handoff files:
+ *    - branch history: `<handoffDir>/<branch-with-slashes-as-hyphens>.agent-handoff.md`
+ *    - stable alias: `<repo-root>/monday-handoff.md` (default) for easy @ attach
  * 5) Optionally run a configured agent command with prompt/context paths.
  *
  * This script is designed to be called from monday-webhook-bridge:
@@ -56,6 +57,7 @@ const DEFAULT_API_VERSION = '2025-04';
 const DEFAULT_MAX_UPDATES = 20;
 const DEFAULT_OUTPUT_DIR = '.monday/intake';
 const DEFAULT_HANDOFF_DIR = '.monday/handoffs';
+const DEFAULT_HANDOFF_ALIAS_FILE = 'monday-handoff.md';
 const DEFAULT_BRANCH_PREFIX = 'dev/monday';
 const DEFAULT_BRANCH_PREFIX_RULES = 'bugs=fix,epics backlog=feat';
 const DEFAULT_BRANCH_INCLUDE_TICKET_ID = false;
@@ -116,6 +118,16 @@ function parseBoolean(value, fallback = false) {
   if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
   if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
   return fallback;
+}
+
+function normalizeOptionalPath(value, fallback = '') {
+  const raw = String(value ?? fallback ?? '').trim();
+  if (!raw) return '';
+  const normalized = normalize(raw);
+  if (['0', 'false', 'no', 'n', 'off', 'none', 'disable', 'disabled'].includes(normalized)) {
+    return '';
+  }
+  return raw;
 }
 
 function normalizePrefix(value) {
@@ -310,6 +322,7 @@ async function loadMondayEnvValues(args) {
     'MONDAY_AGENT_COMMAND',
     'MONDAY_AGENT_OUTPUT_DIR',
     'MONDAY_AGENT_HANDOFF_DIR',
+    'MONDAY_AGENT_HANDOFF_ALIAS_FILE',
     'MONDAY_AGENT_RULES_FILE',
     'MONDAY_AGENT_BRANCH_PREFIX',
     'MONDAY_AGENT_BRANCH_PREFIX_RULES',
@@ -387,6 +400,16 @@ function buildRuntimeConfig(args, envValues) {
       args,
       'handoff-dir',
       process.env.MONDAY_AGENT_HANDOFF_DIR || envValues.MONDAY_AGENT_HANDOFF_DIR || DEFAULT_HANDOFF_DIR,
+    ),
+    handoffAliasFile: normalizeOptionalPath(
+      getOptionalArg(
+        args,
+        'handoff-alias-file',
+        process.env.MONDAY_AGENT_HANDOFF_ALIAS_FILE ||
+          envValues.MONDAY_AGENT_HANDOFF_ALIAS_FILE ||
+          DEFAULT_HANDOFF_ALIAS_FILE,
+      ),
+      DEFAULT_HANDOFF_ALIAS_FILE,
     ),
     dispatch: parseBoolean(getOptionalArg(args, 'dispatch', 'false'), false) || Boolean(args.dispatch),
     agentCommand: getOptionalArg(
@@ -698,7 +721,11 @@ function sanitizeBranchForHandoffFilename(branch) {
   return s || 'monday-ticket';
 }
 
-function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, promptText }) {
+function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, archiveHandoffPath, promptText }) {
+  const archiveLine =
+    archiveHandoffPath && archiveHandoffPath !== relativeHandoffPath
+      ? `- **Branch-specific history file:** \`${archiveHandoffPath}\``
+      : '';
   return [
     '# Cursor IDE Agent — Monday handoff',
     '',
@@ -706,8 +733,9 @@ function buildIdeHandoffBody({ branchLabel, relativeHandoffPath, promptText }) {
     '',
     `- **Git branch:** \`${branchLabel}\``,
     `- **This file (repo-relative):** \`${relativeHandoffPath}\``,
+    ...(archiveLine ? [archiveLine] : []),
     '',
-    'Re-running intake for the same branch overwrites this file. The filename matches the branch with `/` replaced by `-`.',
+    'Branch history files are kept in `.monday/handoffs/` and the stable alias is refreshed on each run.',
     '',
     '---',
     '',
@@ -1200,15 +1228,31 @@ async function writeIntakeFiles(config, context, promptText) {
     String(context.gitPreparation?.preparedBranch || '').trim() || context.branchCandidate;
   let handoffPath = '';
   let handoffBaseName = '';
+  let handoffAliasPath = '';
   if (config.ideHandoff) {
     handoffBaseName = `${sanitizeBranchForHandoffFilename(branchLabel)}.agent-handoff`;
     handoffPath = path.join(handoffDir, `${handoffBaseName}.md`);
     const handoffBody = buildIdeHandoffBody({
       branchLabel,
       relativeHandoffPath: resolveRepoRelativePath(handoffPath),
+      archiveHandoffPath: '',
       promptText,
     });
     await fs.writeFile(handoffPath, handoffBody, 'utf8');
+
+    if (config.handoffAliasFile) {
+      handoffAliasPath = path.isAbsolute(config.handoffAliasFile)
+        ? config.handoffAliasFile
+        : path.resolve(process.cwd(), config.handoffAliasFile);
+      await fs.mkdir(path.dirname(handoffAliasPath), { recursive: true });
+      const aliasBody = buildIdeHandoffBody({
+        branchLabel,
+        relativeHandoffPath: resolveRepoRelativePath(handoffAliasPath),
+        archiveHandoffPath: resolveRepoRelativePath(handoffPath),
+        promptText,
+      });
+      await fs.writeFile(handoffAliasPath, aliasBody, 'utf8');
+    }
   }
 
   return {
@@ -1219,6 +1263,7 @@ async function writeIntakeFiles(config, context, promptText) {
     baseName,
     handoffPath: handoffPath || null,
     handoffBaseName: handoffBaseName || null,
+    handoffAliasPath: handoffAliasPath || null,
   };
 }
 
@@ -1244,6 +1289,9 @@ async function dispatchAgent(config, files, context, gitPreparation) {
     MONDAY_AGENT_PROMPT_FILE: files.promptPath,
     MONDAY_AGENT_CONTEXT_FILE: files.contextPath,
     MONDAY_AGENT_IDE_HANDOFF_FILE: files.handoffPath ? resolveRepoRelativePath(files.handoffPath) : '',
+    MONDAY_AGENT_IDE_HANDOFF_ALIAS_FILE: files.handoffAliasPath
+      ? resolveRepoRelativePath(files.handoffAliasPath)
+      : '',
     MONDAY_AGENT_ITEM_ID: context.ticket.id,
     MONDAY_AGENT_ITEM_NAME: context.ticket.title,
     MONDAY_AGENT_BRANCH_CANDIDATE: context.branchCandidate,
@@ -1307,6 +1355,7 @@ function printUsage() {
   print('  --max-updates <n>');
   print('  --output-dir <dir>');
   print('  --handoff-dir <dir>');
+  print('  --handoff-alias-file <path|false> (default monday-handoff.md)');
   print('  --rules-file <path>');
   print('  --branch-prefix <prefix>');
   print('  --branch-prefix-rules "id:bugs=fix,id:epics_backlog=feat,bugs=fix,epics backlog=feat"');
@@ -1328,6 +1377,7 @@ function printUsage() {
   print('  MONDAY_AGENT_COMMAND');
   print('  MONDAY_AGENT_OUTPUT_DIR');
   print('  MONDAY_AGENT_HANDOFF_DIR');
+  print('  MONDAY_AGENT_HANDOFF_ALIAS_FILE');
   print('  MONDAY_AGENT_RULES_FILE');
   print('  MONDAY_AGENT_BRANCH_PREFIX');
   print('  MONDAY_AGENT_BRANCH_PREFIX_RULES');
@@ -1435,6 +1485,12 @@ async function main(argv = process.argv) {
   if (files.handoffPath) {
     print(
       `IDE handoff (@ this file in Cursor Agent): ${resolveRepoRelativePath(files.handoffPath)}`,
+      colors.green,
+    );
+  }
+  if (files.handoffAliasPath) {
+    print(
+      `Stable handoff alias (@ this file in Cursor Agent): ${resolveRepoRelativePath(files.handoffAliasPath)}`,
       colors.green,
     );
   }

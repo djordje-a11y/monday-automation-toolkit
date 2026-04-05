@@ -8,7 +8,9 @@ This toolkit is intentionally **outside product repos** and writes local runtime
 
 - One CLI for all operations: `monday-auto`
 - Workspace-scoped execution (`--workspace /path/to/repo`)
-- Stable handoff markdown path for Cursor `@`:
+- Stable easy-attach handoff alias for Cursor `@`:
+  - `monday-handoff.md`
+- Branch-specific handoff history:
   - `.monday/handoffs/<branch-flat>.agent-handoff.md`
 - Local-only files ignored through `.git/info/exclude` (no product repo pollution)
 
@@ -55,6 +57,8 @@ npm --prefix /path/to/monday-automation-toolkit run monday:auto -- check --works
 ```bash
 monday-auto init --workspace /path/to/repo
 ```
+
+This also ensures local ignore entries for `.monday/`, `.monday.local`, and `monday-handoff.md`.
 
 3. Create workspace config:
 
@@ -103,14 +107,17 @@ Per workspace, the toolkit writes:
 - `.monday/intake/<item>-<slug>-<timestamp>.prompt.md`
 - `.monday/intake/<item>-<slug>-<timestamp>.context.json`
 - `.monday/handoffs/<branch-flat>.agent-handoff.md`
+- `monday-handoff.md` (stable alias that always points to the latest handoff)
 - `.monday/runtime.json`
 - `.monday/managed-webhooks.json`
 
-In Cursor Agent chat, attach:
+In Cursor Agent chat, attach the stable alias:
 
 ```text
-@.monday/handoffs/<branch-flat>.agent-handoff.md
+@monday-handoff.md
 ```
+
+If needed, you can still attach a specific history file from `.monday/handoffs/`.
 
 ## Full Setup Guide
 

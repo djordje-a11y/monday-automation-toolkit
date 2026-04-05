@@ -3,3 +3,4 @@ npm-debug.log*
 *.log
 .monday.local
 .monday/
+monday-handoff.md

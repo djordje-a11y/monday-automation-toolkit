@@ -19,11 +19,14 @@ monday-auto intake --workspace /path/to/repo --item-id 123456789 --dispatch
 
 - `.monday/intake/<itemId>-<slug>-<timestamp>.prompt.md`
 - `.monday/intake/<itemId>-<slug>-<timestamp>.context.json`
-- `.monday/handoffs/<branch-flat>.agent-handoff.md`
+- `.monday/handoffs/<branch-flat>.agent-handoff.md` (branch-specific history)
+- `monday-handoff.md` (stable latest alias for easy `@`)
 
-Handoff path is printed as:
+Handoff paths are printed as:
 
 `IDE handoff (@ this file in Cursor Agent): .monday/handoffs/...`
+
+`Stable handoff alias (@ this file in Cursor Agent): monday-handoff.md`
 
 ## Key env configuration
 
@@ -40,6 +43,7 @@ MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE="true"
 
 MONDAY_AGENT_OUTPUT_DIR=".monday/intake"
 MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"
+MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"
 MONDAY_AGENT_IDE_HANDOFF="true"
 ```
 
@@ -57,10 +61,11 @@ MONDAY_AGENT_COMMAND='...'
 Use the handoff markdown in sidebar Agent chat:
 
 ```text
-@.monday/handoffs/<branch-flat>.agent-handoff.md
+@monday-handoff.md
 ```
 
-This gives the agent ticket context + rules in one file, with filename tied to the prepared branch.
+This gives the agent ticket context + rules in one stable file path.
+Branch-specific copies are still available under `.monday/handoffs/`.
 
 ## Agent command env vars
 
@@ -69,6 +74,7 @@ Available inside `MONDAY_AGENT_COMMAND`:
 - `MONDAY_AGENT_PROMPT_FILE`
 - `MONDAY_AGENT_CONTEXT_FILE`
 - `MONDAY_AGENT_IDE_HANDOFF_FILE`
+- `MONDAY_AGENT_IDE_HANDOFF_ALIAS_FILE`
 - `MONDAY_AGENT_ITEM_ID`
 - `MONDAY_AGENT_ITEM_NAME`
 - `MONDAY_AGENT_BRANCH_CANDIDATE`

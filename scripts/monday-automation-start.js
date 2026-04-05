@@ -68,6 +68,8 @@ const DEFAULT_WEBHOOK_REGISTER_SUBITEMS = true;
 const SUBITEM_WEBHOOK_EVENT = 'change_subitem_column_value';
 const DEFAULT_STATUS_COLUMN_ID = 'status';
 const DEFAULT_MANAGED_WEBHOOK_STATE_FILE = '.monday/managed-webhooks.json';
+const DEFAULT_REQUIRE_LOCAL_IGNORES = true;
+const REQUIRED_LOCAL_IGNORE_ENTRIES = ['.monday/', '.monday.local', 'monday-handoff.md'];
 
 const colors = {
   reset: '\x1b[0m',
@@ -110,6 +112,34 @@ function parseList(value) {
     .split(',')
     .map((entry) => String(entry || '').trim())
     .filter(Boolean);
+}
+
+function parseIgnoreFilePatterns(content) {
+  return String(content || '')
+    .split(/\r?\n/)
+    .map((line) => String(line || '').trim())
+    .filter((line) => line && !line.startsWith('#') && !line.startsWith('!'));
+}
+
+function normalizeIgnorePattern(value) {
+  return String(value || '')
+    .trim()
+    .replace(/^\.?\//, '');
+}
+
+function matchesRequiredIgnore(pattern, requiredEntry) {
+  const normalizedPattern = normalizeIgnorePattern(pattern);
+  const normalizedRequired = normalizeIgnorePattern(requiredEntry);
+  if (!normalizedPattern || !normalizedRequired) return false;
+
+  if (normalizedRequired === '.monday/') {
+    return (
+      normalizedPattern === '.monday/' ||
+      normalizedPattern === '.monday' ||
+      normalizedPattern.startsWith('.monday/')
+    );
+  }
+  return normalizedPattern === normalizedRequired;
 }
 
 function parseArgs(argv = process.argv) {
@@ -231,6 +261,7 @@ async function loadMondayEnvValues(args) {
     'MONDAY_WEBHOOK_EVENT',
     'MONDAY_WEBHOOK_REGISTER_SUBITEMS',
     'MONDAY_WEBHOOK_MANAGED_STATE_FILE',
+    'MONDAY_REQUIRE_LOCAL_IGNORES',
     'MONDAY_ENV_FILE',
   ];
 
@@ -268,6 +299,75 @@ function maskSecret(value) {
   if (!raw) return '';
   if (raw.length <= 8) return `${raw.slice(0, 2)}...${raw.slice(-2)}`;
   return `${raw.slice(0, 4)}...${raw.slice(-4)}`;
+}
+
+async function readTextIfExists(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf8');
+  } catch {
+    return '';
+  }
+}
+
+async function runGit(workspace, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn('git', args, {
+      cwd: workspace,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    if (child.stdout) {
+      child.stdout.on('data', (chunk) => {
+        stdout += String(chunk || '');
+      });
+    }
+    if (child.stderr) {
+      child.stderr.on('data', (chunk) => {
+        stderr += String(chunk || '');
+      });
+    }
+    child.on('exit', (code) => {
+      if (code === 0) {
+        resolve(stdout.trim());
+        return;
+      }
+      reject(new Error(stderr.trim() || `git ${args.join(' ')} failed with code ${code}`));
+    });
+    child.on('error', (error) => reject(error));
+  });
+}
+
+async function evaluateLocalIgnoreCoverage(workspace) {
+  const trackedGitignorePath = path.resolve(workspace, '.gitignore');
+  const trackedGitignoreContent = await readTextIfExists(trackedGitignorePath);
+
+  let localExcludePath = '';
+  let localExcludeContent = '';
+  try {
+    const gitExcludePath = await runGit(workspace, ['rev-parse', '--git-path', 'info/exclude']);
+    localExcludePath = path.isAbsolute(gitExcludePath)
+      ? gitExcludePath
+      : path.resolve(workspace, gitExcludePath);
+    localExcludeContent = await readTextIfExists(localExcludePath);
+  } catch {
+    localExcludePath = '';
+    localExcludeContent = '';
+  }
+
+  const allPatterns = [
+    ...parseIgnoreFilePatterns(trackedGitignoreContent),
+    ...parseIgnoreFilePatterns(localExcludeContent),
+  ];
+  const missing = REQUIRED_LOCAL_IGNORE_ENTRIES.filter(
+    (requiredEntry) => !allPatterns.some((pattern) => matchesRequiredIgnore(pattern, requiredEntry)),
+  );
+
+  return {
+    ok: missing.length === 0,
+    missing,
+    checkedFiles: [trackedGitignorePath, localExcludePath].filter(Boolean),
+  };
 }
 
 function buildRuntimeConfig(args, envValues, envFile) {
@@ -407,6 +507,16 @@ function buildRuntimeConfig(args, envValues, envFile) {
       args,
       'runtime-file',
       process.env.MONDAY_AUTOMATION_RUNTIME_FILE || envValues.MONDAY_AUTOMATION_RUNTIME_FILE || DEFAULT_RUNTIME_FILE,
+    ),
+    requireLocalIgnores: parseBoolean(
+      getOptionalArg(
+        args,
+        'require-local-ignores',
+        process.env.MONDAY_REQUIRE_LOCAL_IGNORES ||
+          envValues.MONDAY_REQUIRE_LOCAL_IGNORES ||
+          String(DEFAULT_REQUIRE_LOCAL_IGNORES),
+      ),
+      DEFAULT_REQUIRE_LOCAL_IGNORES,
     ),
     checkOnly: Boolean(args.check),
     noTunnelFlag: Boolean(args['no-tunnel']),
@@ -635,6 +745,16 @@ function validateRequirements(config) {
         config.allowedBoardIds.length > 0
           ? `Scoped boards: ${config.allowedBoardIds.join(', ')}`
           : 'No board scope configured (set MONDAY_ALLOWED_BOARD_IDS, MONDAY_BOARD_ID, or MONDAY_WEBHOOK_REGISTER_BOARD_IDS)',
+    },
+    {
+      key: 'LOCAL_IGNORES',
+      ok: !config.requireLocalIgnores || Boolean(config.localIgnoreCheck?.ok),
+      required: config.requireLocalIgnores,
+      message: !config.requireLocalIgnores
+        ? 'Disabled by MONDAY_REQUIRE_LOCAL_IGNORES=false'
+        : config.localIgnoreCheck?.ok
+          ? `Configured in: ${(config.localIgnoreCheck?.checkedFiles || []).join(', ')}`
+          : `Missing ignore entries: ${(config.localIgnoreCheck?.missing || []).join(', ')} (run: monday-auto init --workspace ${process.cwd()})`,
     },
     {
       key: 'USER_FILTER',
@@ -1009,6 +1129,7 @@ function printUsage() {
   print('  --webhook-register-board-ids "2116143116,..."');
   print('  --webhook-register-subitems true|false (default true; registers change_subitem_column_value)');
   print('  --webhook-managed-state-file <path>');
+  print('  --require-local-ignores true|false (default true)');
   print('');
 }
 
@@ -1244,6 +1365,7 @@ async function main(argv = process.argv) {
   const loadedEnv = await loadMondayEnvValues(args);
   const envFile = resolveEnvFileCandidate(getOptionalArg(args, 'env-file')) || loadedEnv.source || '';
   const config = buildRuntimeConfig(args, loadedEnv.values, envFile);
+  config.localIgnoreCheck = await evaluateLocalIgnoreCoverage(process.cwd());
 
   print(`monday token: ${maskSecret(config.token)} (masked)`, colors.dim);
   print(`webhook secret: ${maskSecret(config.webhookSecret)} (masked)`, colors.dim);

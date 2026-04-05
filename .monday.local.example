@@ -26,6 +26,7 @@ MONDAY_WEBHOOK_EVENT="change_specific_column_value"
 MONDAY_WEBHOOK_REGISTER_SUBITEMS="true"
 MONDAY_AUTOMATION_RUNTIME_FILE=".monday/runtime.json"
 MONDAY_WEBHOOK_MANAGED_STATE_FILE=".monday/managed-webhooks.json"
+MONDAY_REQUIRE_LOCAL_IGNORES="true"
 
 MONDAY_AGENT_BRANCH_PREFIX="dev/monday"
 MONDAY_AGENT_BRANCH_PREFIX_RULES="bugs=fix,epics backlog=feat"
@@ -38,6 +39,8 @@ MONDAY_AGENT_GIT_REQUIRE_CLEAN_WORKTREE="true"
 MONDAY_AGENT_IDE_HANDOFF="true"
 MONDAY_AGENT_OUTPUT_DIR=".monday/intake"
 MONDAY_AGENT_HANDOFF_DIR=".monday/handoffs"
+# Stable chat attach target in repo root (use `@monday-handoff.md`).
+MONDAY_AGENT_HANDOFF_ALIAS_FILE="monday-handoff.md"
 
 MONDAY_AGENT_COMMAND='$HOME/.local/bin/cursor-agent --mode plan --workspace "$PWD" "Read $MONDAY_AGENT_IDE_HANDOFF_FILE and return required sections."'
 
@@ -47,3 +50,4 @@ MONDAY_AGENT_COMMAND='$HOME/.local/bin/cursor-agent --mode plan --workspace "$PW
 # MONDAY_AGENT_RULES_FILE="scripts/templates/monday-ticket-agent-rules.md"
 # MONDAY_AGENT_UNSET_CURSOR_API_KEY="true"
 # MONDAY_AGENT_HEADLESS_PRINT="false"
+# MONDAY_AGENT_HANDOFF_ALIAS_FILE="false"

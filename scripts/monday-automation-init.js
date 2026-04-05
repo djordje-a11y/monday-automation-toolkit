@@ -21,7 +21,7 @@ const colors = {
   dim: '\x1b[2m',
 };
 
-const REQUIRED_EXCLUDES = ['.monday/', '.monday.local'];
+const REQUIRED_EXCLUDES = ['.monday/', '.monday.local', 'monday-handoff.md'];
 
 function print(message, color = '') {
   // eslint-disable-next-line no-console
