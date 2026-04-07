@@ -84,6 +84,17 @@ const DEFAULT_RULES = [
   '- Keep scope minimal and explicit; call out behavior changes separately.',
   '- Include deterministic validation plan (targeted tests first, then confidence checks).',
   '- Output must include: ticket understanding, proposed branch name, solution approach, risks/blockers.',
+  '',
+  'Completion and handoff rules (mandatory when user asks to commit):',
+  '- Do not hardcode personal names/emails in shared rules or ticket comments.',
+  '- Use custom signing/author commit command only when user explicitly asks for it.',
+  '- If user does not explicitly request custom signing/author, use normal commit flow (`git commit -m "<message>"`).',
+  '- Write a meaningful commit message: fix|feat|chore subject + user-visible outcome + why (avoid vague messages).',
+  '- Staged-first workflow: user stages reviewed files and tells agent changes are staged.',
+  '- On "staged push" (or equivalent): verify staged diff is non-empty, commit staged files only, push branch, post monday update via `monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file "<reply-file.md>"`, then set status to "AI fix ready".',
+  '- Push rule: use "git push -u origin HEAD" when no upstream exists, otherwise "git push origin HEAD".',
+  '- monday update must include root cause, fix summary, validation, branch, commit SHA, and commit URL.',
+  '- Never set "AI fix ready" before push + commit URL are available.',
 ].join('\n');
 
 const colors = {

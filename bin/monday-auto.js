@@ -32,6 +32,10 @@ const SCRIPT_MAP = {
     script: path.resolve(TOOLKIT_ROOT, 'scripts/monday-agent-intake.js'),
     prependArgs: [],
   },
+  'reply-latest': {
+    script: path.resolve(TOOLKIT_ROOT, 'scripts/monday-reply-latest.js'),
+    prependArgs: [],
+  },
 };
 
 function printUsage() {
@@ -51,12 +55,14 @@ function printUsage() {
       '  stop    Stop bridge/tunnel processes for a workspace',
       '  bridge  Run bridge directly',
       '  intake  Run intake directly',
+      '  reply-latest  Reply to latest monday update (fallback: top-level update)',
       '',
       'Examples:',
       '  monday-auto init --workspace /path/to/repo',
       '  monday-auto check --workspace /path/to/repo',
       '  monday-auto start --workspace /path/to/repo',
       '  monday-auto stop --workspace /path/to/repo',
+      '  monday-auto reply-latest --workspace /path/to/repo --item-id 123 --body "Fix is implemented."',
       '',
     ].join('\n'),
   );
