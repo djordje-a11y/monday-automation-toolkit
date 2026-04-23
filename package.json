@@ -12,6 +12,7 @@
     "monday:start": "node ./bin/monday-auto.js start",
     "monday:check": "node ./bin/monday-auto.js check",
     "monday:stop": "node ./bin/monday-auto.js stop",
-    "monday:init": "node ./bin/monday-auto.js init"
+    "monday:init": "node ./bin/monday-auto.js init",
+    "monday:reply-latest": "node ./bin/monday-auto.js reply-latest"
   }
 }

@@ -356,6 +356,50 @@ Dry run option:
 monday-auto stop --workspace /path/to/your/repo --dry-run
 ```
 
+## 11) Done-task closeout (`staged push`)
+
+Recommended operator flow when implementation is done:
+
+1. Review changes.
+2. Stage intended files.
+3. Tell agent changes are staged.
+4. Trigger with `staged push` (or equivalent wording).
+
+Expected agent behavior on staged-push intent:
+- verify staged diff is not empty
+- create a meaningful commit message (outcome + why)
+- commit staged files only
+- push branch (`git push -u origin HEAD` if upstream missing; else `git push origin HEAD`)
+- post monday update via:
+  `monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file ".monday/reply-latest.md"`
+  (auto-reply latest; fallback to top-level when no updates exist)
+- set status to `AI fix ready`
+
+Do not include personal names/emails in shared rules/comments.
+Use custom signing/author commit command only when user explicitly asks for it; otherwise use normal commit flow (`git commit -m "<message>"`).
+
+Suggested reply body template:
+
+```bash
+cat > .monday/reply-latest.md <<'EOF'
+Fix is implemented.
+
+Root cause:
+- ...
+
+Fix:
+- ...
+
+Validation:
+- ...
+
+Git:
+- Branch: ...
+- Commit: ...
+- Commit URL: ...
+EOF
+```
+
 ## Troubleshooting
 
 - **No handoff file visible in explorer**  
