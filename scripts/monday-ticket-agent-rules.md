@@ -5,6 +5,7 @@ Ticket intake rules:
 - If behavior changes are required, call them out explicitly as approval-needed.
 - Provide a deterministic validation plan: focused regression first, then confidence checks.
 - Always propose a clear branch name based on task slug (no ticket id in branch name unless explicitly requested).
+- After reading the handoff `.md` and confirming the prepared branch, rename the current chat to match the branch name without the configured prefix (example: `dev/monday/fix-login-timeout` -> `fix-login-timeout`).
 - If ticket data is insufficient, list exact missing inputs needed to proceed.
 
 Completion and handoff rules (mandatory when user asks to commit):
