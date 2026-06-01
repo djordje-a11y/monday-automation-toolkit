@@ -102,10 +102,50 @@ monday-auto start  --workspace /path/to/repo
 monday-auto stop   --workspace /path/to/repo
 monday-auto bridge --workspace /path/to/repo
 monday-auto intake --workspace /path/to/repo --item-id 123 --dispatch
+monday-auto reply-latest --workspace /path/to/repo --item-id 123 --body "Fix is implemented."
 ```
 
 Always run/start/stop via `monday-auto` when validating toolkit behavior.  
 If a target project still contains old `npm run monday:automation:*` scripts, do not use them.
+
+## Staged Push Closeout Flow
+
+For done-task closeout:
+
+1. User reviews code and stages intended files.
+2. User tells agent that changes are staged.
+3. On command `staged push` (or equivalent intent), agent should:
+   - commit staged files only with a meaningful message (outcome + why)
+   - use custom signing/author command only if user explicitly requested it; otherwise use normal `git commit -m`
+   - push branch (`-u` only when upstream is missing)
+   - post monday update with `monday-auto reply-latest` (reply latest, fallback top-level)
+   - set status to `AI fix ready`
+
+Detailed requirements: `MONDAY_AGENT_AUTOMATION_REQUIREMENTS.md`.
+
+Quick template for reply body:
+
+```bash
+cat > .monday/reply-latest.md <<'EOF'
+Fix is implemented.
+
+Root cause:
+- ...
+
+Fix:
+- ...
+
+Validation:
+- ...
+
+Git:
+- Branch: ...
+- Commit: ...
+- Commit URL: ...
+EOF
+
+monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file ".monday/reply-latest.md"
+```
 
 ## Generated files
 

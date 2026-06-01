@@ -84,6 +84,17 @@ const DEFAULT_RULES = [
   '- Keep scope minimal and explicit; call out behavior changes separately.',
   '- Include deterministic validation plan (targeted tests first, then confidence checks).',
   '- Output must include: ticket understanding, proposed branch name, solution approach, risks/blockers.',
+  '',
+  'Completion and handoff rules (mandatory when user asks to commit):',
+  '- Do not hardcode personal names/emails in shared rules or ticket comments.',
+  '- Use custom signing/author commit command only when user explicitly asks for it.',
+  '- If user does not explicitly request custom signing/author, use normal commit flow (`git commit -m "<message>"`).',
+  '- Write a meaningful commit message: fix|feat|chore subject + user-visible outcome + why (avoid vague messages).',
+  '- Staged-first workflow: user stages reviewed files and tells agent changes are staged.',
+  '- On "staged push" (or equivalent): verify staged diff is non-empty, commit staged files only, push branch, post monday update via `monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file "<reply-file.md>"`, then set status to "AI fix ready".',
+  '- Push rule: use "git push -u origin HEAD" when no upstream exists, otherwise "git push origin HEAD".',
+  '- monday update must include root cause, fix summary, validation, branch, commit SHA, and commit URL.',
+  '- Never set "AI fix ready" before push + commit URL are available.',
 ].join('\n');
 
 const colors = {
@@ -772,10 +783,12 @@ function ensureTrailingNewline(text) {
   return raw.endsWith('\n') ? raw : `${raw}\n`;
 }
 
-function normalizeUpdateText(value) {
+function normalizeUpdateText(value, maxLen = 0) {
   const html = String(value || '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&')
@@ -783,12 +796,28 @@ function normalizeUpdateText(value) {
     .replace(/&gt;/gi, '>')
     .replace(/&#39;/gi, "'")
     .replace(/&quot;/gi, '"');
-  return html
+  const normalized = html
     .split(/\r?\n/)
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(Boolean)
-    .join('\n')
-    .slice(0, 4000);
+    .join('\n');
+  if (maxLen > 0) return normalized.slice(0, maxLen);
+  return normalized;
+}
+
+function resolveUpdateText(update, maxLen = 0) {
+  const textBody = String(update?.textBody || update?.text_body || '').trim();
+  const htmlBody = String(update?.body || '').trim();
+  const normalizedTextBody = normalizeUpdateText(textBody);
+  const normalizedHtmlBody = normalizeUpdateText(htmlBody);
+
+  // monday may return shortened text_body for long/collapsed updates.
+  const preferred = normalizedHtmlBody.length > normalizedTextBody.length
+    ? normalizedHtmlBody
+    : normalizedTextBody;
+  if (!preferred) return '';
+  if (maxLen > 0) return preferred.slice(0, maxLen);
+  return preferred;
 }
 
 function pickLatestUpdate(updates) {
@@ -827,7 +856,7 @@ function extractLatestUpdateDetails(context) {
   const updateId = String(latestUpdate?.id || '').trim();
   const updateCreatedAt = String(latestUpdate?.createdAt || latestUpdate?.created_at || '').trim();
   const updateAuthor = String(latestUpdate?.creator?.name || '').trim() || 'unknown';
-  const updateText = normalizeUpdateText(latestUpdate?.textBody || latestUpdate?.text_body || '');
+  const updateText = resolveUpdateText(latestUpdate);
 
   return {
     found: true,
@@ -1267,7 +1296,7 @@ function buildPrompt({ item, statusText, branchCandidate, rulesText, sectionCont
   const latestUpdateLines = updates.slice(0, 8).map((update, index) => {
     const creator = String(update?.creator?.name || '').trim() || 'unknown';
     const created = String(update?.created_at || '').trim() || 'unknown-time';
-    const body = String(update?.text_body || '').trim().replace(/\s+/g, ' ').slice(0, 500);
+    const body = resolveUpdateText(update);
     return `${index + 1}. [${created}] ${creator}: ${body || '(empty update)'}`;
   });
 
@@ -1340,6 +1369,8 @@ function buildContextObject({
       name: String(update?.creator?.name || ''),
     },
     textBody: String(update?.text_body || ''),
+    bodyHtml: String(update?.body || ''),
+    textResolved: resolveUpdateText(update),
     assets: (Array.isArray(update?.assets) ? update.assets : []).map((asset) => ({
       id: String(asset?.id || ''),
       name: String(asset?.name || ''),

@@ -65,3 +65,52 @@ After monday status changes to trigger value:
 For same-ticket retriggers:
 - existing branch is reused (not reset to base)
 - handoff files contain only the latest monday comment context
+
+## Done-task closeout protocol (required)
+
+When user confirms task is done:
+
+1. User reviews changes and stages intended files.
+2. User tells agent that changes are staged (trigger phrase: `staged push`, or equivalent).
+3. Agent on staged-push intent:
+   - verifies staged diff is non-empty
+   - writes a meaningful commit message (fix|feat|chore + outcome + why)
+   - commits staged files only (no auto-adding unrelated files)
+   - uses custom signing/author commit command only when user explicitly asks for it
+   - otherwise uses normal commit flow (`git commit -m "<message>"`)
+4. Agent pushes branch:
+   - `git push -u origin HEAD` when branch has no upstream
+   - `git push origin HEAD` when upstream already exists
+5. Agent posts monday update:
+   - use `monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file "<reply-file.md>"`
+   - this automatically replies to latest update, or posts top-level update if no comments exist
+   - include root cause, fix summary, validation evidence, branch, commit SHA, commit URL
+6. Agent sets status to `AI fix ready` after monday update.
+
+Fast-path template:
+
+```bash
+cat > .monday/reply-latest.md <<'EOF'
+Fix is implemented.
+
+Root cause:
+- ...
+
+Fix:
+- ...
+
+Validation:
+- ...
+
+Git:
+- Branch: ...
+- Commit: ...
+- Commit URL: ...
+EOF
+
+monday-auto reply-latest --workspace "$PWD" --item-id "<ticket-id>" --body-file ".monday/reply-latest.md"
+```
+
+Guardrails:
+- Do not hardcode personal names/emails in shared rules or ticket comments.
+- Do not set `AI fix ready` before push + commit URL are available.
